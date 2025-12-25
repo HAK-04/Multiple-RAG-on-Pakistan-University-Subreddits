@@ -1,13 +1,12 @@
 import streamlit as st
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 import os
 import io
 from contextlib import redirect_stdout
 
 from chroma_db.end_points import RedditEmbeddingsProcessor
 
-# Load environment variables
-load_dotenv()
+# load_dotenv()
 
 # Page configuration
 st.set_page_config(
