@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Demo with Team</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+/* GENERAL STYLES */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f0f2f5;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 40px auto;
+    background: #fff;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+/* TITLE SECTION FULL WIDTH & BIGGER */
+.title-section {
+    text-align: center;
+    margin-bottom: 60px;
+    width: 100%;
+}
+
+.main-title {
+    color: #000000;
+    font-size: 90px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.subtitle-gradient {
+    font-size: 42px;
+    margin: 10px 0 0 0;
+    background: linear-gradient(90deg, #3b82f6, #0ea5e9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* RAG ENGINES INTRO CARDS */
+.engines-exploration {
+    margin-bottom: 50px;
+    text-align: center;
+}
+
+.section-subtitle {
+    font-size: 24px;
+    color: #333;
+    margin-bottom: 30px;
+}
+
+.rag-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    text-align: left;
+}
+
+.rag-card {
+    background: #fff;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid #f0f0f0;
+    transition: transform 0.2s;
+}
+
+.rag-card:hover {
+    transform: translateY(-5px);
+}
+
+.icon-box {
+    width: 45px;
+    height: 45px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 20px;
+    color: white;
+}
+
+/* Icon Colors */
+.orange { background: #f59e0b; }
+.blue   { background: #3b82f6; }
+.purple { background: #a855f7; }
+.green  { background: #10b981; }
+
+.rag-card h3 {
+    margin: 0 0 15px 0;
+    font-size: 20px;
+    color: #111827;
+}
+
+.rag-card p {
+    margin: 0;
+    color: #6b7280;
+    line-height: 1.5;
+    font-size: 15px;
+}
+
+/* TEAM SECTION */
+.team-section {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.team-section h2 {
+    font-size: 28px;
+    color: #000000;
+    margin-bottom: 20px;
+}
+
+.team-members {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.team-member {
+    text-align: center;
+    width: 180px;
+}
+
+.team-member img {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #000000;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.team-member img:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+}
+
+.team-member p {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #333;
+}
+
+/* RAG FORM */
+label {
+    display: block;
+    margin-top: 20px;
+    font-weight: bold;
+}
+
+select, textarea {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+textarea {
+    height: 120px;
+    resize: vertical;
+}
+
+button {
+    margin-top: 20px;
+    width: 100%;
+    padding: 12px;
+    background-color: #2563eb;
+    color: #fff;
+    font-weight: bold;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #1e40af;
+}
+
+button:disabled {
+    background-color: #94a3b8;
+    cursor: not-allowed;
+}
+
+/* STEPS AND ANSWER BOX */
+.steps-box, .answer-box {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+
+.steps-box h3, .answer-box h3 {
+    margin-top: 0;
+    color: #1f2937;
+    font-size: 20px;
+    margin-bottom: 15px;
+}
+
+ul {
+    padding-left: 20px;
+}
+
+#steps li {
+    margin: 8px 0;
+    padding: 10px 15px;
+    background: white;
+    border-radius: 4px;
+    border-left: 3px solid #3b82f6;
+    animation: slideIn 0.3s ease-out;
+    font-size: 14px;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* FORMATTED ANSWER STYLES */
+#answer {
+    line-height: 1.8;
+    color: #1f2937;
+    font-family: 'Georgia', serif;
+    font-size: 16px;
+}
+
+#answer h1, #answer h2, #answer h3, #answer h4 {
+    color: #111827;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+#answer h1 {
+    font-size: 28px;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 8px;
+}
+
+#answer h2 {
+    font-size: 24px;
+}
+
+#answer h3 {
+    font-size: 20px;
+    color: #2563eb;
+}
+
+#answer h4 {
+    font-size: 18px;
+}
+
+#answer p {
+    margin: 12px 0;
+    text-align: justify;
+}
+
+#answer ul, #answer ol {
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
+#answer li {
+    margin: 8px 0;
+    line-height: 1.6;
+}
+
+#answer strong {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+#answer em {
+    color: #4b5563;
+    font-style: italic;
+}
+
+#answer blockquote {
+    border-left: 4px solid #3b82f6;
+    margin: 16px 0;
+    padding: 12px 20px;
+    background: #f0f9ff;
+    font-style: italic;
+    color: #1e40af;
+}
+
+#answer code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: #dc2626;
+}
+
+#answer pre {
+    background: #1f2937;
+    color: #f9fafb;
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 16px 0;
+}
+
+#answer pre code {
+    background: none;
+    color: #f9fafb;
+    padding: 0;
+}
+
+#answer a {
+    color: #2563eb;
+    text-decoration: none;
+    border-bottom: 1px solid #93c5fd;
+}
+
+#answer a:hover {
+    color: #1e40af;
+    border-bottom-color: #1e40af;
+}
+
+#answer hr {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 24px 0;
+}
+
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* MOBILE RESPONSIVE */
+@media (max-width: 600px) {
+    .rag-grid {
+        grid-template-columns: 1fr;
+    }
+    .team-members {
+        flex-direction: column;
+        align-items: center;
+    }
+    .main-title {
+        font-size: 50px;
+    }
+    .subtitle-gradient {
+        font-size: 28px;
+    }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+    <!-- TITLE SECTION -->
+    <div class="title-section">
+        <h1 class="main-title">Master RAG Systems</h1>
+        <h2 class="subtitle-gradient">Through Interactive Learning</h2>
+    </div>
+
+    <!-- RAG ENGINES SECTION -->
+    <div class="engines-exploration">
+        <h2 class="section-subtitle">Four RAG Engines to Explore</h2>
+        <div class="rag-grid">
+            <div class="rag-card">
+                <div class="icon-box orange">⚡</div>
+                <h3>Vanilla RAG</h3>
+                <p>Basic retrieval and generation. Perfect for understanding the fundamentals.</p>
+            </div>
+
+            <div class="rag-card">
+                <div class="icon-box blue">◎</div>
+                <h3>Iterative RAG</h3>
+                <p>Deep dive with multiple retrieval rounds for comprehensive answers.</p>
+            </div>
+
+            <div class="rag-card">
+                <div class="icon-box purple">✨</div>
+                <h3>Re-Ranking RAG</h3>
+                <p>Refines and prioritizes top relevant documents before generating answers.</p>
+            </div>
+
+            <div class="rag-card">
+                <div class="icon-box green">🧠</div>
+                <h3>Agentic RAG</h3>
+                <p>Smart assistant that decides when and how to retrieve information.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- TEAM SECTION -->
+    <div class="team-section">
+        <h2>Our Team</h2>
+        <div class="team-members">
+            <div class="team-member">
+                <img src="static/images/Muhammad Ahmed.jpg" alt="Muhammad Ahmad">
+                <p>Muhammad Ahmad</p>
+                <p>AI Engineer</p>
+            </div>
+            <div class="team-member">
+                <img src="static/images/Hammad Ahmad.jpeg" alt="Hammad Ahmad">
+                <p>Hammad Ahmad</p>
+                <p>Database Engineer</p>  
+            </div>
+            <div class="team-member">
+                <img src="static/images/Husnain Mushtaq.png" alt="Husnain Mushtaq">
+                <p>Husnain Mushtaq</p>
+                <p>Frontend Engineer</p>
+            </div>
+            <div class="team-member">
+                <img src="static/images/Hasham Nadeem.jpeg" alt="Hasham Nadeem">
+                <p>Hasham Nadeem</p>
+                <p>DevOps and Backend Engineer</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- RAG FORM -->
+    <label for="ragType">Select RAG Engine:</label>
+    <select id="ragType">
+        <option value="vanilla">Vanilla RAG</option>
+        <option value="iterative">Iterative RAG</option>
+        <option value="reranking">Re-Ranking RAG</option>
+        <option value="agentic">Agentic RAG</option>
+    </select>
+
+    <label for="query">Enter your question:</label>
+    <textarea id="query" placeholder="Type your question here..."></textarea>
+
+    <button onclick="runRAG()" id="runButton">Start</button>
+
+    <div class="steps-box">
+        <h3>Processing Steps:</h3>
+        <ul id="steps"></ul>
+    </div>
+
+    <div class="answer-box">
+        <h3>Answer:</h3>
+        <div id="answer"></div>
+    </div>
+
+</div>
+
+<script>
+// Configure marked.js for better formatting
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+    headerIds: true,
+    mangle: false
+});
+
+async function runRAG() {
+    const ragType = document.getElementById("ragType").value;
+    const query = document.getElementById("query").value;
+
+    const stepsList = document.getElementById("steps");
+    const answerBox = document.getElementById("answer");
+    const runButton = document.getElementById("runButton");
+
+    // Validation
+    if (!query.trim()) {
+        alert("Please enter a question!");
+        return;
+    }
+
+    // Reset UI
+    stepsList.innerHTML = "";
+    answerBox.innerHTML = '<div class="loading"></div> Processing your question...';
+    runButton.disabled = true;
+    runButton.innerHTML = 'Processing...';
+
+    // Add initial step
+    addStep("🚀 Starting RAG process...");
+
+    try {
+        const response = await fetch("/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                query: query,
+                mode: ragType
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Display steps from backend
+            if (data.steps && data.steps.length > 0) {
+                for (let step of data.steps) {
+                    addStep(step);
+                    await new Promise(r => setTimeout(r, 200)); // Small delay for animation
+                }
+            }
+
+            // Display final answer with Markdown formatting
+            if (data.answer) {
+                answerBox.innerHTML = marked.parse(data.answer);
+            } else {
+                answerBox.innerHTML = "<p>No answer received</p>";
+            }
+            
+            addStep("✅ Process completed successfully!");
+        } else {
+            answerBox.innerHTML = `<p style="color: #dc2626;"><strong>Error:</strong> ${data.error || "Unknown error"}</p>`;
+            addStep(`❌ Error: ${data.error || "Unknown error"}`);
+        }
+
+    } catch (error) {
+        answerBox.innerHTML = `<p style="color: #dc2626;"><strong>Error:</strong> ${error.message}</p>`;
+        addStep(`❌ Error connecting to server: ${error.message}`);
+    } finally {
+        runButton.disabled = false;
+        runButton.innerHTML = 'Start';
+    }
+}
+
+function addStep(stepText) {
+    const stepsList = document.getElementById("steps");
+    const li = document.createElement("li");
+    li.textContent = stepText;
+    stepsList.appendChild(li);
+    // Scroll to bottom
+    li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Allow Enter key to submit (Ctrl+Enter or Cmd+Enter)
+document.getElementById("query").addEventListener("keydown", function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        runRAG();
+    }
+});
+</script>
+
+</body>
+</html>
