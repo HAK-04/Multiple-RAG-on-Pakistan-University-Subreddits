@@ -1,7 +1,7 @@
 streamlit>=1.28.0
 openai>=1.0.0
 chromadb>=0.4.0
-CrossEncoder
+sentence_transformers
 pathlib
 time
 contextlib
