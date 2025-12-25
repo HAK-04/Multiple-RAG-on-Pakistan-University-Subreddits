@@ -3,7 +3,6 @@ import chromadb
 from openai import OpenAI
 from pathlib import Path
 import time
-from sentence_transformers import CrossEncoder
 
 class RedditEmbeddingsProcessor:
     def __init__(self, openai_api_key):
@@ -16,9 +15,6 @@ class RedditEmbeddingsProcessor:
             name="reddit_posts",
             metadata={"description": "Reddit posts from GIKI, NUST, and LUMS with comments as metadata"}
         )
-        
-        # Initialize cross-encoder for re-ranking (lazy loading)
-        self.cross_encoder = None
         
     def generate_embedding(self, text):
         """Generate embedding for a given text using OpenAI"""
@@ -216,7 +212,7 @@ Be conversational but informative."""
             return f"Error calling LLM: {e}"
 
     # ============================================================================
-    # NEW FUNCTION 1: Query Rewriting with LLM
+    # FUNCTION 1: Query Rewriting with LLM
     # ============================================================================
     
     def ask_with_query_rewriting(self, user_query, n_results=5, uni_filter=None):
@@ -339,7 +335,7 @@ Be conversational and informative."""
             }
 
     # ============================================================================
-    # NEW FUNCTION 2: Tool-based Retrieval with LLM
+    # FUNCTION 2: Tool-based Retrieval with LLM
     # ============================================================================
     
     def ask_with_tool_calls(self, user_query, n_results=5):
@@ -540,23 +536,14 @@ Guidelines:
             return f"Error in tool-based retrieval: {e}"
 
     # ============================================================================
-    # NEW FUNCTION 3: Two-Stage Retrieval with Cross-Encoder Re-ranking
+    # FUNCTION 3: Two-Stage Retrieval with LLM-based Re-ranking
     # ============================================================================
-    
-    def _load_cross_encoder(self):
-        """Lazy load the cross-encoder model"""
-        if self.cross_encoder is None:
-            print("📦 Loading cross-encoder model (first time only)...")
-            # Using MS MARCO cross-encoder - excellent for semantic relevance
-            self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-            print("✓ Cross-encoder loaded!\n")
-        return self.cross_encoder
     
     def ask_with_reranking(self, user_query, initial_candidates=20, top_k=5, uni_filter=None):
         """
-        Two-stage retrieval: 
+        Two-stage retrieval using LLM for re-ranking: 
         1. Retrieve many candidates using embeddings (fast but less precise)
-        2. Re-rank using cross-encoder (slower but more precise)
+        2. Re-rank using LLM to score relevance (more precise)
         
         Args:
             user_query: User's question
@@ -569,11 +556,11 @@ Guidelines:
         """
         
         print(f"\n{'='*60}")
-        print("🎯 TWO-STAGE RETRIEVAL WITH RE-RANKING")
+        print("🎯 TWO-STAGE RETRIEVAL WITH LLM RE-RANKING")
         print(f"{'='*60}")
         print(f"Query: {user_query}")
         print(f"Stage 1: Retrieving {initial_candidates} candidates")
-        print(f"Stage 2: Re-ranking and keeping top {top_k}\n")
+        print(f"Stage 2: LLM re-ranking and keeping top {top_k}\n")
         
         # Stage 1: Retrieve many candidates using embedding similarity
         print("📊 Stage 1: Initial retrieval with embeddings...")
@@ -584,47 +571,113 @@ Guidelines:
         )
         
         if not results or not results['documents'][0]:
-            return "Sorry, I couldn't find any relevant posts to answer your question."
+            return {
+                "answer": "Sorry, I couldn't find any relevant posts to answer your question.",
+                "reranking_scores": []
+            }
         
         print(f"✓ Retrieved {len(results['documents'][0])} candidates\n")
         
-        # Stage 2: Re-rank using cross-encoder
-        print("🔄 Stage 2: Re-ranking with cross-encoder...")
+        # Stage 2: Re-rank using LLM
+        print("🔄 Stage 2: Re-ranking with LLM...")
         
-        # Load cross-encoder
-        cross_encoder = self._load_cross_encoder()
+        # Prepare documents for re-ranking
+        docs_to_rank = []
+        for i, (doc, metadata) in enumerate(zip(results['documents'][0], results['metadatas'][0])):
+            doc_info = {
+                'index': i,
+                'title': metadata['title'],
+                'body': metadata['body'][:500],  # Limit body length for efficiency
+                'uni': metadata['uni_name'].upper(),
+                'metadata': metadata
+            }
+            docs_to_rank.append(doc_info)
         
-        # Prepare pairs for cross-encoder: (query, document)
-        pairs = []
-        for doc, metadata in zip(results['documents'][0], results['metadatas'][0]):
-            # Combine title and body for re-ranking
-            doc_text = f"{metadata['title']} {metadata['body']}"
-            pairs.append([user_query, doc_text])
+        # Use LLM to score relevance
+        reranking_prompt = f"""You are a relevance scoring system. Score how relevant each document is to the user's query on a scale of 0-100.
+
+User Query: {user_query}
+
+Documents to score:
+"""
+        for i, doc in enumerate(docs_to_rank, 1):
+            reranking_prompt += f"\n[Document {i}]\nUniversity: {doc['uni']}\nTitle: {doc['title']}\nBody: {doc['body']}\n"
         
-        # Get relevance scores from cross-encoder
-        print("   Computing relevance scores...")
-        scores = cross_encoder.predict(pairs)
-        
-        # Sort by scores (descending)
-        scored_results = list(zip(
-            scores,
-            results['documents'][0],
-            results['metadatas'][0]
-        ))
-        scored_results.sort(key=lambda x: x[0], reverse=True)
-        
-        # Keep only top_k
-        top_results = scored_results[:top_k]
-        
-        print(f"✓ Re-ranked and selected top {top_k} documents")
-        print(f"\n📊 Re-ranking Scores:")
-        for i, (score, _, metadata) in enumerate(top_results, 1):
-            print(f"   {i}. Score: {score:.4f} | {metadata['uni_name'].upper()} | {metadata['title'][:60]}...")
+        reranking_prompt += """\n\nProvide scores in JSON format ONLY, like this:
+{"scores": [{"doc_id": 1, "score": 85}, {"doc_id": 2, "score": 72}, ...]}
+
+Score based on:
+- Direct relevance to the query
+- Quality and informativeness of content
+- How well it answers the specific question
+
+Return ONLY the JSON, no other text."""
+
+        try:
+            print("   LLM scoring documents for relevance...")
+            
+            score_response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a relevance scoring system. Return only valid JSON."},
+                    {"role": "user", "content": reranking_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=500
+            )
+            
+            # Parse scores
+            score_text = score_response.choices[0].message.content.strip()
+            
+            # Clean up response (remove markdown code blocks if present)
+            if "```json" in score_text:
+                score_text = score_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in score_text:
+                score_text = score_text.split("```")[1].split("```")[0].strip()
+            
+            scores_data = json.loads(score_text)
+            scores_list = scores_data.get('scores', [])
+            
+            # Map scores back to documents
+            scored_docs = []
+            for score_item in scores_list:
+                doc_id = score_item['doc_id'] - 1  # Convert to 0-indexed
+                if 0 <= doc_id < len(docs_to_rank):
+                    scored_docs.append({
+                        'score': score_item['score'],
+                        'doc': docs_to_rank[doc_id],
+                        'metadata': docs_to_rank[doc_id]['metadata']
+                    })
+            
+            # Sort by score (descending)
+            scored_docs.sort(key=lambda x: x['score'], reverse=True)
+            
+            # Keep top_k
+            top_docs = scored_docs[:top_k]
+            
+            print(f"✓ Re-ranked and selected top {top_k} documents")
+            print(f"\n📊 Re-ranking Scores:")
+            for i, item in enumerate(top_docs, 1):
+                print(f"   {i}. Score: {item['score']}/100 | {item['doc']['uni']} | {item['doc']['title'][:60]}...")
+            
+        except Exception as e:
+            print(f"⚠️ Error in LLM re-ranking: {e}")
+            print("Falling back to embedding-based ranking")
+            # Fallback: use original embedding order
+            top_docs = [
+                {
+                    'score': 100 - (i * 5),  # Simple descending scores
+                    'doc': docs_to_rank[i],
+                    'metadata': docs_to_rank[i]['metadata']
+                }
+                for i in range(min(top_k, len(docs_to_rank)))
+            ]
         
         # Build context from re-ranked results
         context_parts = []
-        for i, (score, doc, metadata) in enumerate(top_results, 1):
-            context_parts.append(f"\n--- POST {i} (Relevance Score: {score:.4f}) ---")
+        for i, item in enumerate(top_docs, 1):
+            metadata = item['metadata']
+            context_parts.append(f"\n--- POST {i} (Relevance Score: {item['score']}/100) ---")
             context_parts.append(f"University: {metadata['uni_name'].upper()}")
             context_parts.append(f"Title: {metadata['title']}")
             context_parts.append(f"Body: {metadata['body']}")
@@ -645,7 +698,7 @@ Guidelines:
         
         system_prompt = """You are a helpful assistant answering questions about Pakistani universities (GIKI, NUST, LUMS) based on Reddit posts and comments.
 
-The posts provided have been carefully re-ranked for relevance using a cross-encoder model, so they should be highly relevant to the question.
+The posts provided have been carefully re-ranked for relevance using an LLM scoring system, so they should be highly relevant to the question.
 
 Provide accurate, balanced answers that:
 - Reference specific details from the context
@@ -673,11 +726,11 @@ Be conversational and informative."""
                 "reranking_scores": [
                     {
                         "rank": i,
-                        "score": float(score),
-                        "university": metadata['uni_name'].upper(),
-                        "title": metadata['title']
+                        "score": item['score'],
+                        "university": item['doc']['uni'],
+                        "title": item['doc']['title']
                     }
-                    for i, (score, _, metadata) in enumerate(top_results, 1)
+                    for i, item in enumerate(top_docs, 1)
                 ]
             }
             
@@ -686,45 +739,3 @@ Be conversational and informative."""
                 "answer": f"Error generating answer: {e}",
                 "reranking_scores": []
             }
-
-
-# # Main execution
-# if __name__ == "__main__":
-#     # Set your OpenAI API key
-#     OPENAI_API_KEY = "sk-svcacct-z_HuXCdWCKM-2PI9YQ76xSkjVVTp8ODdoYa35DMPVOvCAKuHTD1IfZWuiwYBkRFGIQlJT3BlbkFJ9HE9V7RutRYeN2swdUL-FVd9jnEDJQ2k_PUzEyOldAet2j4ZiZMEFLjhRs730wQN2PoA"  # Replace with your actual key
-    
-#     # Define file paths
-#     file_paths = {
-#         "giki": "/Users/mhmh/Downloads/BDA part 1/giki_data.json",
-#         "nust": "/Users/mhmh/Downloads/BDA part 1/nust_data.json",
-#         "lums": "/Users/mhmh/Downloads/BDA part 1/lums_data.json"
-#     }
-    
-#     # Initialize processor
-#     processor = RedditEmbeddingsProcessor(OPENAI_API_KEY)
-    
-#     # Process all files (uncomment to run)
-#     # processor.process_all_files(file_paths)
-    
-#     # Example usage of different methods
-#     print("\n" + "="*80)
-#     print("DEMONSTRATION OF ALL THREE METHODS")
-#     print("="*80)
-    
-#     # METHOD 3: Tool-based Retrieval
-#     print("\n\n" + "="*80)
-#     print("METHOD 3: TOOL-BASED RETRIEVAL")
-#     print("="*80)
-    
-#     answer3 = processor.ask_with_tool_calls(
-#         user_query="Compare the campus life at NUST and LUMS",
-#         n_results=3
-#     )
-    
-#     print("\nAnswer:")
-#     print("-" * 80)
-#     if isinstance(answer3, dict):
-#         print(answer3['answer'])
-#     else:
-#         print(answer3)
-#     print("-" * 80)
